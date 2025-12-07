@@ -44,9 +44,21 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
       type: DriftSqlType.int,
       requiredDuringInsert: false,
       defaultValue: const Constant(0));
+  static const VerificationMeta _startTimeMeta =
+      const VerificationMeta('startTime');
+  @override
+  late final GeneratedColumn<DateTime> startTime = GeneratedColumn<DateTime>(
+      'start_time', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _endTimeMeta =
+      const VerificationMeta('endTime');
+  @override
+  late final GeneratedColumn<DateTime> endTime = GeneratedColumn<DateTime>(
+      'end_time', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns =>
-      [id, title, isDone, date, timeSpentInSeconds];
+      [id, title, isDone, date, timeSpentInSeconds, startTime, endTime];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -82,6 +94,14 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
           timeSpentInSeconds.isAcceptableOrUnknown(
               data['time_spent_in_seconds']!, _timeSpentInSecondsMeta));
     }
+    if (data.containsKey('start_time')) {
+      context.handle(_startTimeMeta,
+          startTime.isAcceptableOrUnknown(data['start_time']!, _startTimeMeta));
+    }
+    if (data.containsKey('end_time')) {
+      context.handle(_endTimeMeta,
+          endTime.isAcceptableOrUnknown(data['end_time']!, _endTimeMeta));
+    }
     return context;
   }
 
@@ -101,6 +121,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
           .read(DriftSqlType.dateTime, data['${effectivePrefix}date'])!,
       timeSpentInSeconds: attachedDatabase.typeMapping.read(
           DriftSqlType.int, data['${effectivePrefix}time_spent_in_seconds'])!,
+      startTime: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}start_time']),
+      endTime: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}end_time']),
     );
   }
 
@@ -116,12 +140,16 @@ class Task extends DataClass implements Insertable<Task> {
   final bool isDone;
   final DateTime date;
   final int timeSpentInSeconds;
+  final DateTime? startTime;
+  final DateTime? endTime;
   const Task(
       {required this.id,
       required this.title,
       required this.isDone,
       required this.date,
-      required this.timeSpentInSeconds});
+      required this.timeSpentInSeconds,
+      this.startTime,
+      this.endTime});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -130,6 +158,12 @@ class Task extends DataClass implements Insertable<Task> {
     map['is_done'] = Variable<bool>(isDone);
     map['date'] = Variable<DateTime>(date);
     map['time_spent_in_seconds'] = Variable<int>(timeSpentInSeconds);
+    if (!nullToAbsent || startTime != null) {
+      map['start_time'] = Variable<DateTime>(startTime);
+    }
+    if (!nullToAbsent || endTime != null) {
+      map['end_time'] = Variable<DateTime>(endTime);
+    }
     return map;
   }
 
@@ -140,6 +174,12 @@ class Task extends DataClass implements Insertable<Task> {
       isDone: Value(isDone),
       date: Value(date),
       timeSpentInSeconds: Value(timeSpentInSeconds),
+      startTime: startTime == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startTime),
+      endTime: endTime == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endTime),
     );
   }
 
@@ -152,6 +192,8 @@ class Task extends DataClass implements Insertable<Task> {
       isDone: serializer.fromJson<bool>(json['isDone']),
       date: serializer.fromJson<DateTime>(json['date']),
       timeSpentInSeconds: serializer.fromJson<int>(json['timeSpentInSeconds']),
+      startTime: serializer.fromJson<DateTime?>(json['startTime']),
+      endTime: serializer.fromJson<DateTime?>(json['endTime']),
     );
   }
   @override
@@ -163,6 +205,8 @@ class Task extends DataClass implements Insertable<Task> {
       'isDone': serializer.toJson<bool>(isDone),
       'date': serializer.toJson<DateTime>(date),
       'timeSpentInSeconds': serializer.toJson<int>(timeSpentInSeconds),
+      'startTime': serializer.toJson<DateTime?>(startTime),
+      'endTime': serializer.toJson<DateTime?>(endTime),
     };
   }
 
@@ -171,13 +215,17 @@ class Task extends DataClass implements Insertable<Task> {
           String? title,
           bool? isDone,
           DateTime? date,
-          int? timeSpentInSeconds}) =>
+          int? timeSpentInSeconds,
+          Value<DateTime?> startTime = const Value.absent(),
+          Value<DateTime?> endTime = const Value.absent()}) =>
       Task(
         id: id ?? this.id,
         title: title ?? this.title,
         isDone: isDone ?? this.isDone,
         date: date ?? this.date,
         timeSpentInSeconds: timeSpentInSeconds ?? this.timeSpentInSeconds,
+        startTime: startTime.present ? startTime.value : this.startTime,
+        endTime: endTime.present ? endTime.value : this.endTime,
       );
   Task copyWithCompanion(TasksCompanion data) {
     return Task(
@@ -188,6 +236,8 @@ class Task extends DataClass implements Insertable<Task> {
       timeSpentInSeconds: data.timeSpentInSeconds.present
           ? data.timeSpentInSeconds.value
           : this.timeSpentInSeconds,
+      startTime: data.startTime.present ? data.startTime.value : this.startTime,
+      endTime: data.endTime.present ? data.endTime.value : this.endTime,
     );
   }
 
@@ -198,13 +248,16 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('title: $title, ')
           ..write('isDone: $isDone, ')
           ..write('date: $date, ')
-          ..write('timeSpentInSeconds: $timeSpentInSeconds')
+          ..write('timeSpentInSeconds: $timeSpentInSeconds, ')
+          ..write('startTime: $startTime, ')
+          ..write('endTime: $endTime')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, title, isDone, date, timeSpentInSeconds);
+  int get hashCode => Object.hash(
+      id, title, isDone, date, timeSpentInSeconds, startTime, endTime);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -213,7 +266,9 @@ class Task extends DataClass implements Insertable<Task> {
           other.title == this.title &&
           other.isDone == this.isDone &&
           other.date == this.date &&
-          other.timeSpentInSeconds == this.timeSpentInSeconds);
+          other.timeSpentInSeconds == this.timeSpentInSeconds &&
+          other.startTime == this.startTime &&
+          other.endTime == this.endTime);
 }
 
 class TasksCompanion extends UpdateCompanion<Task> {
@@ -222,12 +277,16 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<bool> isDone;
   final Value<DateTime> date;
   final Value<int> timeSpentInSeconds;
+  final Value<DateTime?> startTime;
+  final Value<DateTime?> endTime;
   const TasksCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
     this.isDone = const Value.absent(),
     this.date = const Value.absent(),
     this.timeSpentInSeconds = const Value.absent(),
+    this.startTime = const Value.absent(),
+    this.endTime = const Value.absent(),
   });
   TasksCompanion.insert({
     this.id = const Value.absent(),
@@ -235,6 +294,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.isDone = const Value.absent(),
     required DateTime date,
     this.timeSpentInSeconds = const Value.absent(),
+    this.startTime = const Value.absent(),
+    this.endTime = const Value.absent(),
   })  : title = Value(title),
         date = Value(date);
   static Insertable<Task> custom({
@@ -243,6 +304,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<bool>? isDone,
     Expression<DateTime>? date,
     Expression<int>? timeSpentInSeconds,
+    Expression<DateTime>? startTime,
+    Expression<DateTime>? endTime,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -251,6 +314,8 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (date != null) 'date': date,
       if (timeSpentInSeconds != null)
         'time_spent_in_seconds': timeSpentInSeconds,
+      if (startTime != null) 'start_time': startTime,
+      if (endTime != null) 'end_time': endTime,
     });
   }
 
@@ -259,13 +324,17 @@ class TasksCompanion extends UpdateCompanion<Task> {
       Value<String>? title,
       Value<bool>? isDone,
       Value<DateTime>? date,
-      Value<int>? timeSpentInSeconds}) {
+      Value<int>? timeSpentInSeconds,
+      Value<DateTime?>? startTime,
+      Value<DateTime?>? endTime}) {
     return TasksCompanion(
       id: id ?? this.id,
       title: title ?? this.title,
       isDone: isDone ?? this.isDone,
       date: date ?? this.date,
       timeSpentInSeconds: timeSpentInSeconds ?? this.timeSpentInSeconds,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
     );
   }
 
@@ -287,6 +356,12 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (timeSpentInSeconds.present) {
       map['time_spent_in_seconds'] = Variable<int>(timeSpentInSeconds.value);
     }
+    if (startTime.present) {
+      map['start_time'] = Variable<DateTime>(startTime.value);
+    }
+    if (endTime.present) {
+      map['end_time'] = Variable<DateTime>(endTime.value);
+    }
     return map;
   }
 
@@ -297,7 +372,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('title: $title, ')
           ..write('isDone: $isDone, ')
           ..write('date: $date, ')
-          ..write('timeSpentInSeconds: $timeSpentInSeconds')
+          ..write('timeSpentInSeconds: $timeSpentInSeconds, ')
+          ..write('startTime: $startTime, ')
+          ..write('endTime: $endTime')
           ..write(')'))
         .toString();
   }
@@ -321,6 +398,8 @@ typedef $$TasksTableCreateCompanionBuilder = TasksCompanion Function({
   Value<bool> isDone,
   required DateTime date,
   Value<int> timeSpentInSeconds,
+  Value<DateTime?> startTime,
+  Value<DateTime?> endTime,
 });
 typedef $$TasksTableUpdateCompanionBuilder = TasksCompanion Function({
   Value<int> id,
@@ -328,6 +407,8 @@ typedef $$TasksTableUpdateCompanionBuilder = TasksCompanion Function({
   Value<bool> isDone,
   Value<DateTime> date,
   Value<int> timeSpentInSeconds,
+  Value<DateTime?> startTime,
+  Value<DateTime?> endTime,
 });
 
 class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
@@ -353,6 +434,12 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
   ColumnFilters<int> get timeSpentInSeconds => $composableBuilder(
       column: $table.timeSpentInSeconds,
       builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get startTime => $composableBuilder(
+      column: $table.startTime, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get endTime => $composableBuilder(
+      column: $table.endTime, builder: (column) => ColumnFilters(column));
 }
 
 class $$TasksTableOrderingComposer
@@ -379,6 +466,12 @@ class $$TasksTableOrderingComposer
   ColumnOrderings<int> get timeSpentInSeconds => $composableBuilder(
       column: $table.timeSpentInSeconds,
       builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get startTime => $composableBuilder(
+      column: $table.startTime, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get endTime => $composableBuilder(
+      column: $table.endTime, builder: (column) => ColumnOrderings(column));
 }
 
 class $$TasksTableAnnotationComposer
@@ -404,6 +497,12 @@ class $$TasksTableAnnotationComposer
 
   GeneratedColumn<int> get timeSpentInSeconds => $composableBuilder(
       column: $table.timeSpentInSeconds, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startTime =>
+      $composableBuilder(column: $table.startTime, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get endTime =>
+      $composableBuilder(column: $table.endTime, builder: (column) => column);
 }
 
 class $$TasksTableTableManager extends RootTableManager<
@@ -434,6 +533,8 @@ class $$TasksTableTableManager extends RootTableManager<
             Value<bool> isDone = const Value.absent(),
             Value<DateTime> date = const Value.absent(),
             Value<int> timeSpentInSeconds = const Value.absent(),
+            Value<DateTime?> startTime = const Value.absent(),
+            Value<DateTime?> endTime = const Value.absent(),
           }) =>
               TasksCompanion(
             id: id,
@@ -441,6 +542,8 @@ class $$TasksTableTableManager extends RootTableManager<
             isDone: isDone,
             date: date,
             timeSpentInSeconds: timeSpentInSeconds,
+            startTime: startTime,
+            endTime: endTime,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -448,6 +551,8 @@ class $$TasksTableTableManager extends RootTableManager<
             Value<bool> isDone = const Value.absent(),
             required DateTime date,
             Value<int> timeSpentInSeconds = const Value.absent(),
+            Value<DateTime?> startTime = const Value.absent(),
+            Value<DateTime?> endTime = const Value.absent(),
           }) =>
               TasksCompanion.insert(
             id: id,
@@ -455,6 +560,8 @@ class $$TasksTableTableManager extends RootTableManager<
             isDone: isDone,
             date: date,
             timeSpentInSeconds: timeSpentInSeconds,
+            startTime: startTime,
+            endTime: endTime,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

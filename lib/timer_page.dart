@@ -1,8 +1,11 @@
-import 'dart:async'; // Impor untuk logic Timer
+// lib/timer_page.dart
+
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:provider/provider.dart';
+import 'database.dart';
 
-// Enum untuk melacak status timer
 enum TimerStatus { stopped, running, paused }
 
 class TimerPage extends StatefulWidget {
@@ -13,19 +16,17 @@ class TimerPage extends StatefulWidget {
 }
 
 class _TimerPageState extends State<TimerPage> {
-  // --- Variabel State untuk Logika Timer ---
   Timer? _timer;
   Duration _totalDuration = Duration.zero;
   Duration _currentDuration = Duration.zero;
   TimerStatus _status = TimerStatus.stopped;
-  // -----------------------------------------
 
-  // Variabel State untuk Picker
+  Task? _selectedTask;
+
   int _selectedHour = 0;
   int _selectedMinute = 0;
   int _selectedSecond = 0;
 
-  // Controller untuk Picker
   late FixedExtentScrollController _hourController;
   late FixedExtentScrollController _minuteController;
   late FixedExtentScrollController _secondController;
@@ -33,7 +34,6 @@ class _TimerPageState extends State<TimerPage> {
   @override
   void initState() {
     super.initState();
-    //Gunakan 0 sebagai item awal untuk SEMUA picker yang looping
     _hourController = FixedExtentScrollController(initialItem: 0);
     _minuteController = FixedExtentScrollController(initialItem: 0);
     _secondController = FixedExtentScrollController(initialItem: 0);
@@ -41,47 +41,32 @@ class _TimerPageState extends State<TimerPage> {
 
   @override
   void dispose() {
-    _timer?.cancel(); // Pastikan timer dibatalkan saat halaman ditutup
+    _timer?.cancel();
     _hourController.dispose();
     _minuteController.dispose();
     _secondController.dispose();
     super.dispose();
   }
 
-  // --- Fungsi Logika Timer ---
-
   void _startTimer() {
-    // Jika timer di-resume dari pause
     if (_status == TimerStatus.paused) {
-      setState(() {
-        _status = TimerStatus.running;
-      });
-    }
-    // Jika timer dimulai dari awal
-    else {
+      setState(() => _status = TimerStatus.running);
+    } else {
       _totalDuration = Duration(
         hours: _selectedHour,
         minutes: _selectedMinute,
         seconds: _selectedSecond,
       );
-      // Jangan mulai jika durasi 0
       if (_totalDuration.inSeconds == 0) return;
-
       _currentDuration = _totalDuration;
-      setState(() {
-        _status = TimerStatus.running;
-      });
+      setState(() => _status = TimerStatus.running);
     }
-
-    // Mulai timer periodik yang berjalan setiap detik
     _timer = Timer.periodic(const Duration(seconds: 1), _tick);
   }
 
   void _pauseTimer() {
     _timer?.cancel();
-    setState(() {
-      _status = TimerStatus.paused;
-    });
+    setState(() => _status = TimerStatus.paused);
   }
 
   void _cancelTimer() {
@@ -89,92 +74,83 @@ class _TimerPageState extends State<TimerPage> {
     setState(() {
       _status = TimerStatus.stopped;
       _currentDuration = Duration.zero;
+      _selectedTask = null;
     });
-    // Reset picker ke 00:00:00
     _setTimer(0, 0, 0);
   }
 
-  // Fungsi yang dipanggil setiap detik oleh _timer
   void _tick(Timer timer) {
     if (_currentDuration.inSeconds <= 0) {
-      // Timer selesai
       _timer?.cancel();
       setState(() {
         _status = TimerStatus.stopped;
         _currentDuration = Duration.zero;
       });
-      _setTimer(0, 0, 0); // Reset picker
-      // Di sini Anda bisa tambahkan logika notifikasi atau suara
+      _setTimer(0, 0, 0);
     } else {
-      // Kurangi durasi 1 detik
-      setState(() {
-        _currentDuration = _currentDuration - const Duration(seconds: 1);
-      });
+      setState(() =>
+      _currentDuration = _currentDuration - const Duration(seconds: 1));
     }
   }
 
-  // Helper untuk format durasi (Contoh: 01:30:05)
   String _formatDuration(Duration d) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
-    String twoDigitMinutes = twoDigits(d.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(d.inSeconds.remainder(60));
-    return "${twoDigits(d.inHours)}:$twoDigitMinutes:$twoDigitSeconds";
+    return "${twoDigits(d.inHours)}:${twoDigits(d.inMinutes.remainder(60))}:${twoDigits(d.inSeconds.remainder(60))}";
   }
 
-  // --- PERBAIKAN: Helper untuk mencari index terdekat untuk looping picker ---
   int _findNearestIndex(int currentIndex, int targetValue, int maxVal) {
     int currentValue = (currentIndex % maxVal + maxVal) % maxVal;
     int diff = targetValue - currentValue;
-    // Jika jarak lebih dari setengah putaran, pergi ke arah sebaliknya
-    if (diff.abs() > maxVal / 2) {
+    if (diff.abs() > maxVal / 2)
       diff = diff > 0 ? diff - maxVal : diff + maxVal;
-    }
     return currentIndex + diff;
   }
 
-  // Helper untuk mengatur picker (dari tombol preset)
   void _setTimer(int h, int m, int s) {
-    // Hanya izinkan set jika timer tidak sedang berjalan
     if (_status != TimerStatus.stopped) return;
-
     setState(() {
       _selectedHour = h;
       _selectedMinute = m;
       _selectedSecond = s;
     });
-
-    // --- PERBAIKAN: Animasikan jam (sekarang looping) ---
-    int targetHourIndex =
-    _findNearestIndex(_hourController.selectedItem, _selectedHour, 100);
-    _hourController.animateToItem(
-      targetHourIndex,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
-    );
-
-    // --- PERBAIKAN: Animasikan picker menit & detik ke index terdekat ---
-    int targetMinIndex =
-    _findNearestIndex(_minuteController.selectedItem, _selectedMinute, 60);
-    _minuteController.animateToItem(
-      targetMinIndex,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
-    );
-
-    int targetSecIndex =
-    _findNearestIndex(_secondController.selectedItem, _selectedSecond, 60);
-    _secondController.animateToItem(
-      targetSecIndex,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
-    );
+    if (_hourController.hasClients)
+      _hourController.animateToItem(
+          _findNearestIndex(_hourController.selectedItem, _selectedHour, 100),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut);
+    if (_minuteController.hasClients)
+      _minuteController.animateToItem(
+          _findNearestIndex(_minuteController.selectedItem, _selectedMinute, 60),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut);
+    if (_secondController.hasClients)
+      _secondController.animateToItem(
+          _findNearestIndex(_secondController.selectedItem, _selectedSecond, 60),
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut);
   }
 
-  // --- Bagian Build (UI) ---
+  void _onTaskSelected(Task? task) {
+    setState(() => _selectedTask = task);
+    if (task != null && task.startTime != null && task.endTime != null) {
+      var duration = task.endTime!.difference(task.startTime!);
+      if (duration.isNegative) duration += const Duration(days: 1);
+      if (duration.inSeconds > 0) {
+        _setTimer(duration.inHours, duration.inMinutes.remainder(60),
+            duration.inSeconds.remainder(60));
+
+        // Feedback visual
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                "Timer diset: ${duration.inHours} jam ${duration.inMinutes % 60} menit"),
+            duration: const Duration(seconds: 1)));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Scaffold akan otomatis mengambil warna dari AppTheme
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -182,15 +158,38 @@ class _TimerPageState extends State<TimerPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Bagian ATAS: Menampilkan Picker atau Countdown
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: _status == TimerStatus.stopped
-                    ? _buildPickerUI(context) // Tampilkan picker
-                    : _buildCountdownDisplay(context), // Tampilkan countdown
-              ),
-
-              // Bagian BAWAH: Tombol Aksi
+              if (_status == TimerStatus.running && _selectedTask != null)
+                Container(
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    decoration: BoxDecoration(
+                      // Ubah warna badge jika urgent/telat
+                        color: (_selectedTask!.endTime != null && DateTime.now().isAfter(_selectedTask!.endTime!))
+                            ? Colors.red.shade100
+                            : Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(20)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_selectedTask!.endTime != null && DateTime.now().isAfter(_selectedTask!.endTime!))
+                          const Padding(
+                            padding: EdgeInsets.only(right: 8.0),
+                            child: Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                          ),
+                        Text("Fokus: ${_selectedTask!.title}",
+                            style: TextStyle(
+                                color: (_selectedTask!.endTime != null && DateTime.now().isAfter(_selectedTask!.endTime!))
+                                    ? Colors.red.shade900
+                                    : Colors.blue.shade800,
+                                fontWeight: FontWeight.bold)),
+                      ],
+                    )),
+              Expanded(
+                  child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: _status == TimerStatus.stopped
+                          ? _buildPickerUI(context)
+                          : _buildCountdownDisplay(context))),
               _buildActionButtons(context),
             ],
           ),
@@ -199,219 +198,228 @@ class _TimerPageState extends State<TimerPage> {
     );
   }
 
-  /// UI untuk Tampilan Picker dan Preset
   Widget _buildPickerUI(BuildContext context) {
-    return Column(
-      key: const ValueKey('PickerUI'), // Key untuk animasi
-      children: [
-        // --- PERBAIKAN OVERFLOW: Mengurangi padding vertikal ---
-        const SizedBox(height: 10), // Sebelumnya 20
-        _buildPickerLabels(context),
-        const SizedBox(height: 8),
-        _buildTimerPickers(context), // Kirim context untuk tema
-        const SizedBox(height: 30), // Sebelumnya 40
-        _buildPresetButtons(),
-      ],
-    );
-  }
-
-  /// UI untuk Tampilan Countdown
-  Widget _buildCountdownDisplay(BuildContext context) {
-    return Container(
-      key: const ValueKey('CountdownUI'), // Key untuk animasi
-      // --- PERBAIKAN OVERFLOW: Mengurangi tinggi container ---
-      height: 390, // Sebelumnya 400
-      alignment: Alignment.center,
-      child: Text(
-        _formatDuration(_currentDuration),
-        // Gunakan style dari AppTheme
-        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-          fontSize: 64,
-          fontFamily: 'Roboto', // Sesuai kode yang Anda paste
-          color: Theme.of(context).colorScheme.primary, // Warna utama
-        ),
-      ),
-    );
-  }
-
-  /// Label "Hours", "Minutes", "Seconds"
-  Widget _buildPickerLabels(BuildContext context) {
-    // Gunakan style dari AppTheme
-    final labelStyle = Theme.of(context).textTheme.titleMedium;
-
-    return Row(
-      children: [
-        Expanded(child: Center(child: Text('Hours', style: labelStyle))),
-        const SizedBox(width: 40),
-        Expanded(child: Center(child: Text('Minutes', style: labelStyle))),
-        const SizedBox(width: 40),
-        Expanded(child: Center(child: Text('Seconds', style: labelStyle))),
-      ],
-    );
-  }
-
-  /// 3 Picker (Jam, Menit, Detik)
-  Widget _buildTimerPickers(BuildContext context) {
-    // Gunakan style dari AppTheme
-    final itemStyle = TextStyle(
-      fontSize: 56,
-      fontWeight: FontWeight.bold,
-      color: Theme.of(context).colorScheme.onSurface,
-    );
-
-    Widget colonSeparator = Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Text(
-        ':',
-        style: itemStyle.copyWith(fontSize: 48), // Sesuaikan ukuran
-      ),
-    );
-
-    // --- PERBAIKAN: Fungsi build picker dengan opsi looping ---
-    Widget buildPicker(
-        FixedExtentScrollController controller,
-        int maxVal,
-        Function(int) onChanged, {
-          bool looping = false,
-        }) {
-      return Expanded(
-        child: CupertinoPicker.builder(
-          scrollController: controller,
-          itemExtent: 70.0,
-          // --- PERBAIKAN: Gunakan 'null' untuk childCount agar looping ---
-          childCount: looping ? null : maxVal,
-          onSelectedItemChanged: (int index) {
-            // Terapkan modulo untuk mendapatkan nilai 0-59
-            final int value =
-            looping ? (index % maxVal + maxVal) % maxVal : index;
-            onChanged(value);
-          },
-          magnification: 1.1,
-          useMagnifier: true,
-          itemBuilder: (BuildContext context, int index) {
-            // Terapkan modulo untuk mendapatkan nilai 0-59
-            final int value =
-            looping ? (index % maxVal + maxVal) % maxVal : index;
-
-            // Jangan render item di luar jangkauan untuk picker yang tidak looping
-            if (!looping && (index < 0 || index >= maxVal)) {
-              return null;
-            }
-
-            return Center(
-              child: Text(
-                value.toString().padLeft(2, '0'),
-                style: itemStyle,
-              ),
-            );
-          },
-        ),
-      );
-    }
-
-    return SizedBox(
-      height: 250,
-      child: Row(
+    return SingleChildScrollView(
+      child: Column(
+        key: const ValueKey('PickerUI'),
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Jam (sekarang looping, 0-99)
-          buildPicker(
-            _hourController,
-            100, // <-- PERUBAHAN DI SINI (0-99)
-                (value) => setState(() => _selectedHour = value),
-            looping: true, // <-- PERUBAHAN DI SINI
-          ),
-          colonSeparator,
-          // Menit (looping, 0-59)
-          buildPicker(
-            _minuteController,
-            60,
-                (value) => setState(() => _selectedMinute = value),
-            looping: true,
-          ),
-          colonSeparator,
-          // Detik (looping, 0-59)
-          buildPicker(
-            _secondController,
-            60,
-                (value) => setState(() => _selectedSecond = value),
-            looping: true,
-          ),
+          const SizedBox(height: 20),
+          _buildPickerLabels(context),
+          const SizedBox(height: 8),
+          _buildTimerPickers(context),
+          const SizedBox(height: 30),
+          const Divider(),
+          const Text("Select Task for Today",
+              style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 10),
+          _buildTaskSelector(context),
         ],
       ),
     );
   }
 
-  /// Tombol preset
-  Widget _buildPresetButtons() {
-    // Gunakan FilledButton.tonal agar sesuai tema
-    // Warnanya akan otomatis diambil dari colorScheme
-    Widget presetButton(String label, VoidCallback onPressed) {
-      return FilledButton.tonal(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          shape: const CircleBorder(),
-          fixedSize: const Size(100, 100),
-        ),
-        child: Text(label),
-      );
-    }
+  Widget _buildTaskSelector(BuildContext context) {
+    final db = Provider.of<AppDatabase>(context);
+    return StreamBuilder<List<Task>>(
+      stream: db.taskDao.watchAllTasks(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData)
+          return const SizedBox(height: 20, child: CircularProgressIndicator());
+        final allTasks = snapshot.data!;
+        final now = DateTime.now();
+        final todayTasks = allTasks.where((t) {
+          return t.date.year == now.year &&
+              t.date.month == now.month &&
+              t.date.day == now.day &&
+              !t.isDone;
+        }).toList();
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        presetButton('00:10:00', () => _setTimer(0, 10, 0)),
-        presetButton('00:15:00', () => _setTimer(0, 15, 0)),
-        presetButton('00:30:00', () => _setTimer(0, 30, 0)),
-      ],
+        if (todayTasks.isEmpty)
+          return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10)),
+              child: const Text("No tasks for today. Relax! ☕"));
+
+        // Anti-Crash Logic: Cocokkan ID
+        Task? currentDropdownValue;
+        if (_selectedTask != null) {
+          try {
+            currentDropdownValue =
+                todayTasks.firstWhere((t) => t.id == _selectedTask!.id);
+          } catch (e) {
+            currentDropdownValue = null;
+          }
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.shade100)),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<Task>(
+              value: currentDropdownValue,
+              hint: const Text("Pilih tugas untuk dikerjakan..."),
+              isExpanded: true,
+              icon:
+              const Icon(Icons.arrow_drop_down_circle, color: Colors.blue),
+              // MODIFIKASI TAMPILAN ITEM DROPDOWN DISINI
+              items: todayTasks.map((Task task) {
+                String rangeInfo = "";
+                bool isOverdue = false;
+
+                if (task.startTime != null && task.endTime != null) {
+                  var duration = task.endTime!.difference(task.startTime!);
+                  if (duration.isNegative) duration += const Duration(days: 1);
+                  rangeInfo =
+                  " (${duration.inHours}h ${duration.inMinutes % 60}m)";
+
+                  // LOGIKA OVERDUE / TELAT
+                  if (now.isAfter(task.endTime!)) {
+                    isOverdue = true;
+                  }
+                }
+
+                return DropdownMenuItem<Task>(
+                    value: task,
+                    child: Row(
+                      children: [
+                        // Jika telat, tampilkan ikon Warning
+                        if (isOverdue)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 8.0),
+                            child: Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                          ),
+                        Expanded(
+                          child: Text(
+                            "${task.title}$rangeInfo",
+                            overflow: TextOverflow.ellipsis,
+                            // Jika telat, warna teks merah & tebal
+                            style: TextStyle(
+                              color: isOverdue ? Colors.red : Colors.black87,
+                              fontWeight: isOverdue ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ));
+              }).toList(),
+              onChanged: _onTaskSelected,
+            ),
+          ),
+        );
+      },
     );
   }
 
-  /// Tombol aksi (Start, Pause, Cancel, Resume)
+  Widget _buildCountdownDisplay(BuildContext context) {
+    // Cek status urgent untuk tampilan Countdown juga
+    bool isUrgent = false;
+    if (_selectedTask != null && _selectedTask!.endTime != null) {
+      if (DateTime.now().isAfter(_selectedTask!.endTime!)) {
+        isUrgent = true;
+      }
+    }
+
+    final displayColor = isUrgent ? Colors.red : Theme.of(context).colorScheme.primary;
+
+    return Container(
+      key: const ValueKey('CountdownUI'),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(_formatDuration(_currentDuration),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontSize: 64,
+                  fontFamily: 'Roboto',
+                  color: displayColor)), // Warna merah jika urgent
+          const SizedBox(height: 20),
+          if (_totalDuration.inSeconds > 0)
+            SizedBox(
+                width: 200,
+                child: LinearProgressIndicator(
+                    value:
+                    _currentDuration.inSeconds / _totalDuration.inSeconds,
+                    backgroundColor: Colors.grey.shade200,
+                    color: displayColor, // Warna progress bar merah jika urgent
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(10))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPickerLabels(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.titleMedium;
+    return Row(children: [
+      Expanded(child: Center(child: Text('Hours', style: labelStyle))),
+      const SizedBox(width: 40),
+      Expanded(child: Center(child: Text('Minutes', style: labelStyle))),
+      const SizedBox(width: 40),
+      Expanded(child: Center(child: Text('Seconds', style: labelStyle)))
+    ]);
+  }
+
+  Widget _buildTimerPickers(BuildContext context) {
+    final itemStyle = TextStyle(
+        fontSize: 56,
+        fontWeight: FontWeight.bold,
+        color: Theme.of(context).colorScheme.onSurface);
+    Widget buildPicker(FixedExtentScrollController controller, int maxVal,
+        Function(int) onChanged) {
+      return Expanded(
+          child: CupertinoPicker.builder(
+              scrollController: controller,
+              itemExtent: 70.0,
+              childCount: null,
+              onSelectedItemChanged: (int index) =>
+                  onChanged((index % maxVal + maxVal) % maxVal),
+              magnification: 1.1,
+              useMagnifier: true,
+              itemBuilder: (context, index) => Center(
+                  child: Text(
+                      ((index % maxVal + maxVal) % maxVal)
+                          .toString()
+                          .padLeft(2, '0'),
+                      style: itemStyle))));
+    }
+
+    return SizedBox(
+        height: 200,
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          buildPicker(
+              _hourController, 100, (v) => setState(() => _selectedHour = v)),
+          Text(':', style: itemStyle.copyWith(fontSize: 48)),
+          buildPicker(_minuteController, 60,
+                  (v) => setState(() => _selectedMinute = v)),
+          Text(':', style: itemStyle.copyWith(fontSize: 48)),
+          buildPicker(
+              _secondController, 60, (v) => setState(() => _selectedSecond = v))
+        ]));
+  }
+
   Widget _buildActionButtons(BuildContext context) {
-    // Menggunakan ElevatedButton akan otomatis mengambil style dari AppTheme
-    Widget primaryButton(String label, VoidCallback onPressed) {
-      return ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          minimumSize: const Size(150, 56), // Beri ukuran
-        ),
-        child: Text(label, style: const TextStyle(fontSize: 18)),
-      );
-    }
-
-    // Menggunakan OutlinedButton untuk aksi sekunder (Cancel)
-    Widget secondaryButton(String label, VoidCallback onPressed) {
-      return OutlinedButton(
-        onPressed: onPressed,
+    Widget primary(String l, VoidCallback o) => ElevatedButton(
+        onPressed: o,
+        style: ElevatedButton.styleFrom(minimumSize: const Size(150, 56)),
+        child: Text(l, style: const TextStyle(fontSize: 18)));
+    Widget secondary(String l, VoidCallback o) => OutlinedButton(
+        onPressed: o,
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(150, 56),
-          foregroundColor: Theme.of(context).colorScheme.secondary, // Warna teks
-        ),
-        child: Text(label, style: const TextStyle(fontSize: 18)),
-      );
-    }
-
-    // Logika untuk menampilkan tombol yang sesuai
-    switch (_status) {
-      case TimerStatus.stopped:
-        return primaryButton('Start', _startTimer);
-      case TimerStatus.running:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            secondaryButton('Cancel', _cancelTimer),
-            primaryButton('Pause', _pauseTimer),
-          ],
-        );
-      case TimerStatus.paused:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            secondaryButton('Cancel', _cancelTimer),
-            primaryButton('Resume', _startTimer), // _startTimer juga menangani resume
-          ],
-        );
-    }
+            minimumSize: const Size(150, 56),
+            foregroundColor: Theme.of(context).colorScheme.secondary),
+        child: Text(l, style: const TextStyle(fontSize: 18)));
+    if (_status == TimerStatus.stopped) return primary('Start', _startTimer);
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+      secondary('Cancel', _cancelTimer),
+      primary(
+          _status == TimerStatus.running ? 'Pause' : 'Resume',
+          _status == TimerStatus.running ? _pauseTimer : _startTimer)
+    ]);
   }
 }

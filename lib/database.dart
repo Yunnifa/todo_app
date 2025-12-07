@@ -11,7 +11,7 @@ import 'task_dao.dart';
 
 part 'database.g.dart';
 
-// Definisi tabel Tasks
+// 1. Update Definisi tabel Tasks
 class Tasks extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get title => text()();
@@ -19,43 +19,50 @@ class Tasks extends Table {
   DateTimeColumn get date => dateTime()();
   IntColumn get timeSpentInSeconds =>
       integer().withDefault(const Constant(0))();
+
+  // KOLOM BARU: Untuk range waktu (Start & End)
+  // Kita buat nullable() karena mungkin ada tugas yang tidak butuh jam spesifik
+  DateTimeColumn get startTime => dateTime().nullable()();
+  DateTimeColumn get endTime => dateTime().nullable()();
 }
 
 // Definisi database Drift
 @DriftDatabase(tables: [Tasks], daos: [TaskDao])
 class AppDatabase extends _$AppDatabase {
-  /// Constructor utama (dipakai saat aplikasi jalan normal)
   AppDatabase() : super(_openConnection());
 
-  /// Constructor in-memory (dipakai saat testing)
   AppDatabase.inMemory() : super(NativeDatabase.memory());
 
+  // 2. NAIKKAN VERSI SCHEMA DARI 2 KE 3
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
-  // Akses ke DAO
+  @override
   TaskDao get taskDao => TaskDao(this);
 
-  /// Strategy migrasi database
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (m) async {
-        // Dipanggil saat database baru pertama kali dibuat
         await m.createAll();
       },
       onUpgrade: (m, from, to) async {
-        // Dipanggil saat schemaVersion naik
-        if (from == 1) {
-          // Versi 1 belum punya kolom timeSpentInSeconds
+        // Migrasi dari versi 1 ke 2 (Time Spent)
+        if (from < 2) {
           await m.addColumn(tasks, tasks.timeSpentInSeconds);
+        }
+
+        // 3. LOGIKA MIGRASI BARU (Versi 2 ke 3)
+        // Menambahkan kolom startTime dan endTime
+        if (from < 3) {
+          await m.addColumn(tasks, tasks.startTime);
+          await m.addColumn(tasks, tasks.endTime);
         }
       },
     );
   }
 }
 
-// Membuka koneksi database file fisik (db.sqlite)
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
@@ -64,5 +71,4 @@ LazyDatabase _openConnection() {
   });
 }
 
-// Instance global untuk runtime aplikasi
 final database = AppDatabase();
