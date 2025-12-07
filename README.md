@@ -40,7 +40,7 @@ A comprehensive Task Management and Focus Timer application built with Flutter. 
 
 1.  **Clone the repository**
     ```bash
-    git clone [https://github.com/yourusername/first_project_1140.git](https://github.com/yourusername/first_project_1140.git)
+    git clone [https://github.com/Yunnifa/todo_app.git](https://github.com/Yunnifa/todo_app.git)
     ```
 
 2.  **Install dependencies**
@@ -59,8 +59,5 @@ A comprehensive Task Management and Focus Timer application built with Flutter. 
     flutter run
     ```
 
-## 📸 Screenshots
-*(You can upload your screenshots here later)*
-
 ---
-Created by [Your Name]
+made by yui and gemini
